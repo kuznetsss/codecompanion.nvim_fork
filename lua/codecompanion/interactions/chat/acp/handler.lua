@@ -193,6 +193,26 @@ function ACPHandler:handle_thought_chunk(content)
   end
 end
 
+---Reload any buffers whose files were modified on disk
+---@private
+function ACPHandler:reload_modified_buffers()
+  if not next(self.modified_paths) then
+    return
+  end
+
+  local modified = self.modified_paths
+  self.modified_paths = {}
+  vim.schedule(function()
+    local buf_utils = require("codecompanion.utils.buffers")
+    for path, _ in pairs(modified) do
+      local bufnr = buf_utils.get_bufnr_from_path(path)
+      if bufnr then
+        vim.cmd.checktime(bufnr)
+      end
+    end
+  end)
+end
+
 ---Output tool call to the chat
 ---@param tool_call table
 ---@return nil
@@ -225,6 +245,7 @@ function ACPHandler:process_tool_call(tool_call)
         end
       end
     end
+    self:reload_modified_buffers()
   end
 
   -- Cache or cleanup
@@ -322,21 +343,6 @@ end
 function ACPHandler:handle_completion(stop_reason)
   if not self.chat.status or self.chat.status == "" then
     self.chat.status = "success"
-  end
-
-  -- Reload buffers that the agent modified on disk
-  if next(self.modified_paths) then
-    local modified = self.modified_paths
-    self.modified_paths = {}
-    vim.schedule(function()
-      local buf_utils = require("codecompanion.utils.buffers")
-      for path, _ in pairs(modified) do
-        local bufnr = buf_utils.get_bufnr_from_path(path)
-        if bufnr then
-          vim.cmd.checktime(bufnr)
-        end
-      end
-    end)
   end
 
   self.chat:done(self.output, self.reasoning, {})
